@@ -128,7 +128,6 @@ namespace YARG
                     YargLogger.LogException(ex);
                 }
             }
-            GC.Collect();
         }
 
         public async void Dispose()

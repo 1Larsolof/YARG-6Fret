@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using YARG.Core;
 using YARG.Core.Logging;
@@ -17,7 +18,6 @@ namespace YARG.Themes
         public const string BLACK_KEY_PREFAB_NAME = "blackKey";
 
         private readonly Dictionary<ThemePreset, ThemeContainer> _themeContainers = new();
-        private ThemeContainer _defaultTheme;
 
         private void Start()
         {
@@ -26,8 +26,6 @@ namespace YARG.Themes
             {
                 _themeContainers.Add(defaultPreset, defaultPreset.CreateThemeContainer());
             }
-
-            _defaultTheme = _themeContainers[ThemePreset.Default];
         }
 
         public GameObject CreateNotePrefabFromTheme(ThemePreset preset, GameMode gameMode, GameObject noModelPrefab)
@@ -52,39 +50,11 @@ namespace YARG.Themes
             var gameObject = Instantiate(noModelPrefab, transform);
             var prefabCreator = gameObject.GetComponent<IThemeNoteCreator>();
 
-            // Get theme models
-            var themeComp = container.GetThemeComponent();
-            var regular = themeComp.GetNoteModelsForGameMode(gameMode, false);
-            var starPower = themeComp.GetNoteModelsForGameMode(gameMode, true);
-
-            // Fill in defaults for missing models
-            var defaultComp = _defaultTheme.GetThemeComponent();
-            foreach (var (type, prefab) in defaultComp.GetNoteModelsForGameMode(gameMode, false))
-            {
-                if (!regular.ContainsKey(type))
-                {
-                    YargLogger.LogFormatDebug(
-                        "Theme `{0}` does not have model for note type `{1}`. Falling back to the default theme.",
-                        preset.Name, type
-                    );
-                    regular.Add(type, prefab);
-                }
-            }
-
-            foreach (var (type, prefab) in defaultComp.GetNoteModelsForGameMode(gameMode, true))
-            {
-                if (!starPower.ContainsKey(type))
-                {
-                    YargLogger.LogFormatDebug(
-                        "Theme `{0}` does not have SP model for note type `{1}`. Falling back to the default theme.",
-                        preset.Name, type
-                    );
-                    starPower.Add(type, prefab);
-                }
-            }
-
             // Set the models
-            prefabCreator.SetThemeModels(regular, starPower);
+            var themeComp = container.GetThemeComponent();
+            prefabCreator.SetThemeModels(
+                themeComp.GetNoteModelsForGameMode(gameMode, false),
+                themeComp.GetNoteModelsForGameMode(gameMode, true));
 
             // Disable and return
             gameObject.SetActive(false);
@@ -124,14 +94,6 @@ namespace YARG.Themes
 
             // Duplicate the prefab
             var prefab = container.GetThemeComponent().GetModelForGameMode(gameMode, name);
-            if (prefab == null)
-            {
-                YargLogger.LogFormatDebug(
-                    "Theme `{0}` does not have model for prefab `{1}`. Falling back to the default theme.",
-                    preset.Name, item2: name
-                );
-                prefab = _defaultTheme.GetThemeComponent().GetModelForGameMode(gameMode, name);
-            }
             var gameObject = Instantiate(prefab, transform);
 
             // Set info

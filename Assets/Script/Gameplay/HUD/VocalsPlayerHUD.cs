@@ -6,7 +6,6 @@ using UnityEngine;
 using UnityEngine.UI;
 using YARG.Core.Chart;
 using YARG.Core.Game;
-using YARG.Helpers.Extensions;
 using YARG.Localization;
 using YARG.Player;
 
@@ -43,6 +42,13 @@ namespace YARG.Gameplay.HUD
         protected override void OnChartLoaded(SongChart chart)
         {
             _performanceText.text = string.Empty;
+
+            GameManager.BeatEventHandler.Subscribe(PulseBar);
+        }
+
+        protected override void GameplayDestroy()
+        {
+            GameManager.BeatEventHandler.Unsubscribe(PulseBar);
         }
 
         public void Initialize(EnginePreset enginePreset)
@@ -81,15 +87,22 @@ namespace YARG.Gameplay.HUD
             }
 
             // Update pulse
-            if (_shouldPulse)
+            if (_starPowerPulse.color.a > 0f)
             {
-                float pulse = 1 - (float) GameManager.BeatEventHandler.Visual.StrongBeat.CurrentPercentage;
-                _starPowerPulse.color = Color.white.WithAlpha(pulse);
+                var c = _starPowerPulse.color;
+                c.a -= Time.deltaTime * 6f;
+                _starPowerPulse.color = c;
             }
-            else
+        }
+
+        private void PulseBar(Beatline beat)
+        {
+            if (!_shouldPulse || beat.Type == BeatlineType.Weak)
             {
-                _starPowerPulse.color = Color.white.WithAlpha(0);
+                return;
             }
+
+            _starPowerPulse.color = Color.white;
         }
 
         public void UpdateInfo(float phrasePercent, int multiplier,

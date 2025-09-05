@@ -6,7 +6,6 @@ using Cysharp.Threading.Tasks;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using YARG.Assets.Script.Helpers;
 using YARG.Core;
 using YARG.Core.Game;
 using YARG.Helpers.Extensions;
@@ -29,6 +28,7 @@ namespace YARG.Menu.ProfileList
         private static readonly GameMode[] _gameModes =
         {
             GameMode.FiveFretGuitar,
+            GameMode.SixFretGuitar,
             GameMode.FourLaneDrums,
             GameMode.FiveLaneDrums,
             GameMode.Vocals,
@@ -61,14 +61,6 @@ namespace YARG.Menu.ProfileList
         private Toggle _leftyFlipToggle;
         [SerializeField]
         private Toggle _rangeDisabledToggle;
-        [SerializeField]
-        private Toggle _useCymbalModelsToggle;
-        [SerializeField]
-        private Toggle _splitProTomsAndCymbals;
-        [SerializeField]
-        private Toggle _swapSnareAndHiHat;
-        [SerializeField]
-        private Toggle _swapCrashAndRide;
         [SerializeField]
         private TMP_Dropdown _engineDropdown;
         [SerializeField]
@@ -163,10 +155,6 @@ namespace YARG.Menu.ProfileList
             _inputCalibrationField.text = _profile.InputCalibrationMilliseconds.ToString();
             _leftyFlipToggle.isOn = profile.LeftyFlip;
             _rangeDisabledToggle.isOn = profile.RangeEnabled;
-            _useCymbalModelsToggle.isOn = profile.UseCymbalModels;
-            _splitProTomsAndCymbals.isOn = profile.SplitProTomsAndCymbals;
-            _swapSnareAndHiHat.isOn = profile.SwapSnareAndHiHat;
-            _swapCrashAndRide.isOn = profile.SwapCrashAndRide;
 
             // Update preset dropdowns
             _engineDropdown.SetValueWithoutNotify(
@@ -199,12 +187,7 @@ namespace YARG.Menu.ProfileList
 
         private void EnableSettingsForGameMode()
         {
-            var possibleSettings = _profile.GameMode.PossibleProfileSettings(
-                new()
-                {
-                    { ProfileSettingStrings.SPLIT_TOM_AND_CYMBAL_LANES_IN_PRO_DRUMS, _profile.SplitProTomsAndCymbals }
-                });
-
+            var possibleSettings = _profile.GameMode.PossibleProfileSettings();
             for (var i = 0; i < _sidebarContent.transform.childCount; i++)
             {
                 // Disable if the child's gameObject.name is not found in possibleSettings
@@ -213,7 +196,6 @@ namespace YARG.Menu.ProfileList
                 {
                     child.gameObject.SetActive(true);
                 }
-
                 else
                 {
                     child.gameObject.SetActive(false);
@@ -321,31 +303,6 @@ namespace YARG.Menu.ProfileList
         public void ChangeRangeDisabled()
         {
             _profile.RangeEnabled = _rangeDisabledToggle.isOn;
-        }
-
-        public void ChangeUseCymbalModels()
-        {
-            _profile.UseCymbalModels = _useCymbalModelsToggle.isOn;
-        }
-
-        public void ChangeSplitProTomsAndCymbals()
-        {
-            _profile.SplitProTomsAndCymbals = _splitProTomsAndCymbals.isOn;
-            if (_profile.GameMode == GameMode.FourLaneDrums)
-            {
-                _sidebarContent.transform.Find(ProfileSettingStrings.SWAP_SNARE_AND_HI_HAT).gameObject.SetActive(_profile.SplitProTomsAndCymbals);
-                _sidebarContent.transform.Find(ProfileSettingStrings.SWAP_CRASH_AND_RIDE).gameObject.SetActive(_profile.SplitProTomsAndCymbals);
-            }
-        }
-
-        public void ChangeSwapSnareAndHiHat()
-        {
-            _profile.SwapSnareAndHiHat = _swapSnareAndHiHat.isOn;
-        }
-
-        public void ChangeSwapCrashAndRide()
-        {
-            _profile.SwapCrashAndRide = _swapCrashAndRide.isOn;
         }
 
         public void ChangeEngine()

@@ -1,8 +1,9 @@
 ﻿using UnityEngine;
+using YARG.Core.Chart;
 
 namespace YARG.Gameplay.Visuals
 {
-    public class StarpowerBar : GameplayBehaviour
+    public class StarpowerBar : MonoBehaviour
     {
         private static readonly int _fill = Shader.PropertyToID("Fill");
         private static readonly int _pulse = Shader.PropertyToID("Pulse");
@@ -21,17 +22,24 @@ namespace YARG.Gameplay.Visuals
             _starpowerBar.material.SetFloat(_fill, (float) starpowerAmount);
         }
 
-        private void Update()
+        public void PulseBar(Beatline beat)
         {
+            if (beat.Type == BeatlineType.Weak)
+                return;
+
             if (_starpowerAmount >= 0.5 || _starpowerActive)
             {
-                float pulse = 1 - (float) GameManager.BeatEventHandler.Visual.StrongBeat.CurrentPercentage;
-                _starpowerBar.material.SetFloat(_pulse, pulse);
+                _starpowerBar.material.SetFloat(_pulse, 1f);
             }
-            else
-            {
-                _starpowerBar.material.SetFloat(_pulse, 0f);
-            }
+        }
+
+        private void Update()
+        {
+            var mat = _starpowerBar.material;
+
+            // Fade out the pulse
+            float currentPulse = mat.GetFloat(_pulse);
+            mat.SetFloat(_pulse, Mathf.Clamp01(currentPulse - Time.deltaTime * 6f));
         }
     }
 }

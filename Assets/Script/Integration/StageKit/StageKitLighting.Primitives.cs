@@ -4,7 +4,6 @@ using Cysharp.Threading.Tasks;
 using PlasticBand.Haptics;
 using YARG.Core.Chart;
 using YARG.Gameplay;
-using YARG.Playback;
 using Object = UnityEngine.Object;
 
 namespace YARG.Integration.StageKit
@@ -29,7 +28,7 @@ namespace YARG.Integration.StageKit
             _patternIndex = 0;
             // Brought to you by Hacky Hack and the Hacktones
             _gameManager = Object.FindObjectOfType<GameManager>();
-            _gameManager.BeatEventHandler.Visual.Subscribe(OnBeat, BeatEventType.DenominatorBeat, division: _beatsPerCycle / _patternList.Length);
+            _gameManager.BeatEventHandler.Subscribe(OnBeat, _beatsPerCycle / _patternList.Length);
         }
 
         private void OnBeat()
@@ -41,7 +40,7 @@ namespace YARG.Integration.StageKit
             // otherwise they pile up.
             if (!_continuous && _patternIndex == _patternList.Length)
             {
-                _gameManager.BeatEventHandler.Visual.Unsubscribe(OnBeat);
+                _gameManager.BeatEventHandler.Unsubscribe(OnBeat);
                 KillSelf();
             }
 
@@ -55,7 +54,7 @@ namespace YARG.Integration.StageKit
         {
             if (_gameManager != null)
             {
-                _gameManager.BeatEventHandler.Visual.Unsubscribe(OnBeat);
+                _gameManager.BeatEventHandler.Unsubscribe(OnBeat);
             }
         }
     }

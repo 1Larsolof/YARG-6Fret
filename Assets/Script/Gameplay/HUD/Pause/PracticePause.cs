@@ -22,13 +22,13 @@ namespace YARG.Gameplay.HUD
         public void SetAPosition()
         {
             // Set time relative to the strikeline instead of the hit window
-            GameManager.PracticeManager.SetAPosition(GameManager.InputTime);
+            GameManager.PracticeManager.SetAPosition(GameManager.RealVisualTime);
             UpdatePositionText();
         }
 
         public void SetBPosition()
         {
-            GameManager.PracticeManager.SetBPosition(GameManager.InputTime);
+            GameManager.PracticeManager.SetBPosition(GameManager.RealVisualTime);
             UpdatePositionText();
         }
 

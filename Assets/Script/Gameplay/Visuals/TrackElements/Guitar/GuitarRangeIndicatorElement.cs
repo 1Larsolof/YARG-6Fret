@@ -1,5 +1,4 @@
-﻿using System;
-using UnityEngine;
+﻿using UnityEngine;
 using YARG.Gameplay.Player;
 using YARG.Helpers;
 
@@ -9,11 +8,8 @@ namespace YARG.Gameplay.Visuals
     {
         public        FiveFretRangeShift RangeShift;
 
-        private const float SCALE_DENOMINATOR = 5f;
-        private const float TRACK_WIDTH       = 2f;
-        private const float FRET_SIZE         = TRACK_WIDTH / SCALE_DENOMINATOR;
-        private const float TRACK_MIDDLE      = 0f;
-        private const float RANGE_Y_SCALE     = 0.12f;
+        private const float SCALE_DENOMINATOR    = 5f;
+        private const float RANGE_Y_SCALE        = 0.12f;
 
         private static readonly int _color = Shader.PropertyToID("_Color");
 
@@ -28,7 +24,10 @@ namespace YARG.Gameplay.Visuals
 
             var cachedTransform = _meshRenderer.transform;
             var newXScale = (RangeShift.Size / SCALE_DENOMINATOR) * 2;
-            var xPos = -1 + (RangeShift.Size * (FRET_SIZE / 2)) + (RangeShift.Position - 1) * FRET_SIZE;
+
+            // TODO: There has got to be a better way to calculate this
+            var sign = RangeShift.Position < 2 ? -1 : 1;
+            var xPos = ((2 - newXScale) / 2) * (RangeShift.Position == 2 && RangeShift.Size == 3 ? 0f : sign);
 
             cachedTransform.localScale = new Vector3(newXScale, RANGE_Y_SCALE, transform.localScale.z);
             cachedTransform.localPosition = new Vector3(xPos, 0.002f, cachedTransform.localPosition.z);

@@ -29,7 +29,15 @@ namespace YARG.Input
 
         public static event MenuInputEvent MenuInput;
 
+        private static double _beforeUpdateTime;
+        private static double _afterUpdateTime;
         private static double _latestInputTime;
+
+        /// <summary>
+        /// The current time as of when the input system finished updating.
+        /// </summary>
+        /// <seealso cref="InputSystem.onAfterUpdate"/>
+        public static double GameUpdateTime => _afterUpdateTime;
 
         /// <summary>
         /// The time to be used for gameplay input updates.
@@ -120,20 +128,18 @@ namespace YARG.Input
 
         private static void OnBeforeUpdate()
         {
-            InputUpdateTime = CurrentInputTime;
+            _beforeUpdateTime = CurrentInputTime;
         }
 
         private static void OnAfterUpdate()
         {
-            InputUpdateTime = CurrentInputTime;
+            _afterUpdateTime = CurrentInputTime;
+            InputUpdateTime = Math.Max(_beforeUpdateTime, _latestInputTime);
 
-            if (InputUpdateTime < _latestInputTime)
-            {
+            if (_afterUpdateTime < _latestInputTime)
                 YargLogger.LogFormatError(
                     "The last input event for this update is in the future! After-update time: {0}, last input time: {1}",
-                    InputUpdateTime, _latestInputTime
-                );
-            }
+                    _afterUpdateTime, _latestInputTime);
 
             // Update bindings using the input update time
             using (var players = PlayerContainer.PlayerEnumerator)
@@ -165,23 +171,17 @@ namespace YARG.Input
 
             // Only check state events
             if (!eventPtr.IsA<StateEvent>() && !eventPtr.IsA<DeltaStateEvent>())
-            {
                 return;
-            }
 
             // Keep track of the latest input event
             if (eventPtr.time > _latestInputTime)
-            {
                 _latestInputTime = eventPtr.time;
-            }
 
             // Rare edge-case, but the input system very much allows this
             if (eventPtr.time > currentTime)
-            {
                 YargLogger.LogFormatError(
                     "An input event is in the future!\nCurrent time: {0}, event time: {1}, device: {2}",
                     currentTime, eventPtr.time, device);
-            }
 
 // Leaving these for posterity
 #if false
@@ -222,11 +222,8 @@ namespace YARG.Input
             switch (change)
             {
                 case InputDeviceChange.Added:
-                {
                     if (SettingsManager.Settings.InputDeviceLogging.Value)
-                    {
                         YargLogger.LogFormatInfo("Device added: {0}\nDescription:\n{1}\n", device.displayName, device.description);
-                    }
 
                     // Don't toast if the device disabled itself
                     if (device.enabled)
@@ -241,9 +238,8 @@ namespace YARG.Input
 
                     _seenDevices.Add(device);
                     break;
-                }
+
                 case InputDeviceChange.Removed:
-                {
                     YargLogger.LogFormatDebug("Device removed: {0}", device.displayName);
 
                     // Don't toast for disabled devices
@@ -255,10 +251,9 @@ namespace YARG.Input
 
                     _seenDevices.Remove(device);
                     break;
-                }
+
                 // case InputDeviceChange.Reconnected: // Fired alongside Added, not needed
                 case InputDeviceChange.Enabled:
-                {
                     // Devices are enabled when gaining window focus,
                     // but we don't want to add devices when this happens
                     if (_focusChanged || Application.isFocused != _gameFocused)
@@ -280,10 +275,9 @@ namespace YARG.Input
 
                     _seenDevices.Add(device);
                     break;
-                }
+
                 // case InputDeviceChange.Disconnected: // Fired alongside Removed, not needed
                 case InputDeviceChange.Disabled:
-                {
                     // Devices are disabled when losing window focus,
                     // but we don't want to remove devices when this happens
                     if (_focusChanged || Application.isFocused != _gameFocused)
@@ -308,7 +302,6 @@ namespace YARG.Input
                     _seenDevices.Add(device);
                     _disabledDevices.Add(device);
                     break;
-                }
             }
         }
     }

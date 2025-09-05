@@ -100,8 +100,6 @@ namespace YARG.Gameplay.Player
 
         private float _noteSpeedDifficultyScale;
 
-        protected EngineManager.EngineContainer EngineContainer;
-
         protected override void GameplayAwake()
         {
             _replayInputs = new List<GameInput>();
@@ -155,18 +153,22 @@ namespace YARG.Gameplay.Player
             IsInitialized = true;
         }
 
-        public virtual void GameplayUpdate()
+        public virtual void UpdateWithTimes(double inputTime)
         {
             if (!GameManager.Started || GameManager.Paused)
             {
                 return;
             }
 
-            UpdateInputs(GameManager.InputTime);
-            UpdateVisuals(GameManager.VisualTime);
+            UpdateInputs(inputTime);
+            UpdateVisualsWithTimes(inputTime);
         }
 
-        protected abstract void UpdateVisuals(double visualTime);
+        protected virtual void UpdateVisualsWithTimes(double inputTime)
+        {
+            UpdateVisuals(inputTime);
+        }
+
         protected abstract void ResetVisuals();
 
         public virtual void ResetPracticeSection()
@@ -177,6 +179,8 @@ namespace YARG.Gameplay.Player
 
             ResetVisuals();
         }
+
+        protected abstract void UpdateVisuals(double time);
 
         public abstract void SetPracticeSection(uint start, uint end);
 
@@ -197,7 +201,7 @@ namespace YARG.Gameplay.Player
             SetStemMuteState(false);
 
             ResetVisuals();
-            UpdateVisuals(time);
+            UpdateVisualsWithTimes(time);
         }
 
         protected override void GameplayDestroy()
@@ -321,7 +325,7 @@ namespace YARG.Gameplay.Player
 
             LastInputs[input.Action] = input;
 
-            double adjustedTime = GameManager.GetRelativeInputTime(input.Time);
+            double adjustedTime = GameManager.GetCalibratedRelativeInputTime(input.Time);
             // Apply input offset
             adjustedTime += InputCalibration;
             input = new(adjustedTime, input.Action, input.Integer);

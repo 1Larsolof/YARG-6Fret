@@ -159,6 +159,10 @@ namespace YARG.Input
             {
                 binding.ClearBindingsForDevice(device);
             }
+
+            // Remove cleared XInput devices from prompt cache
+            if (device is XInputController xinput)
+                _xinputGamepads.Remove(xinput);
         }
 
         public void ClearAllBindings()

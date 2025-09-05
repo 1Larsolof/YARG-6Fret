@@ -1,5 +1,4 @@
-﻿using DG.Tweening;
-using System;
+﻿using System;
 using UnityEngine;
 using YARG.Core.Chart;
 using YARG.Helpers.Extensions;
@@ -18,38 +17,16 @@ namespace YARG.Gameplay.Visuals
             {
                 // Deal with non-kick notes
 
-                // Shift gems into their correct lanes
-                int lane;
-                bool isCymbal = NoteRef.Pad >= (int) FourLaneDrumPad.YellowCymbal;
-                int laneCount;
-
-                if (Player.EngineParams.Mode is Core.Engine.Drums.DrumsEngineParameters.DrumMode.ProFourLane && Player.Player.Profile.SplitProTomsAndCymbals)
+                // Shift cymbals into their correct lanes
+                int lane = NoteRef.Pad;
+                bool isCymbal = lane >= (int) FourLaneDrumPad.YellowCymbal;
+                if (isCymbal)
                 {
-                    laneCount = 7;
-                    lane = NoteRef.Pad switch
-                    {
-                        1 => Player.Player.Profile.SwapSnareAndHiHat ? 2 : 1,
-                        2 => 3,
-                        3 => 5,
-                        4 => 7,
-                        5 => Player.Player.Profile.SwapSnareAndHiHat ? 1 : 2,
-                        6 => Player.Player.Profile.SwapCrashAndRide ? 6 : 4,
-                        7 => Player.Player.Profile.SwapCrashAndRide ? 4 : 6,
-                        _ => throw new Exception("Unreachable.")
-                    };
-                }
-                else
-                {
-                    laneCount = 4;
-                    lane = NoteRef.Pad;
-                    if (isCymbal)
-                    {
-                        lane -= 3;
-                    }
+                    lane -= 3;
                 }
 
                 // Set the position
-                transform.localPosition = new Vector3(GetElementX(lane, laneCount), 0f, 0f) * LeftyFlipMultiplier;
+                transform.localPosition = new Vector3(GetElementX(lane, 4), 0f, 0f) * LeftyFlipMultiplier;
 
                 // Get which note model to use
                 NoteGroup = noteGroups[GetNoteGroup(isCymbal)];

@@ -7,9 +7,6 @@ using UnityEngine.InputSystem;
 using YARG.Core.Audio;
 using YARG.Core.Chart;
 using YARG.Core.Engine;
-using YARG.Core.Engine.Drums;
-using YARG.Core.Engine.Guitar;
-using YARG.Core.Engine.Vocals;
 using YARG.Core.Game;
 using YARG.Core.Input;
 using YARG.Core.Logging;
@@ -74,7 +71,6 @@ namespace YARG.Gameplay
 
         public PracticeManager  PracticeManager  { get; private set; }
         public BackgroundManager BackgroundManager { get; private set; }
-        public EngineManager EngineManager { get; private set; }
 
         public SongEntry Song  { get; private set; }
         public SongChart    Chart { get; private set; }
@@ -84,14 +80,26 @@ namespace YARG.Gameplay
         /// <inheritdoc cref="SongRunner.SongTime"/>
         public double SongTime => _songRunner.SongTime;
 
+        /// <inheritdoc cref="SongRunner.RealSongTime"/>
+        public double RealSongTime => _songRunner.RealSongTime;
+
         /// <inheritdoc cref="SongRunner.AudioTime"/>
         public double AudioTime => _songRunner.AudioTime;
+
+        /// <inheritdoc cref="SongRunner.RealAudioTime"/>
+        public double RealAudioTime => _songRunner.RealAudioTime;
 
         /// <inheritdoc cref="SongRunner.VisualTime"/>
         public double VisualTime => _songRunner.VisualTime;
 
+        /// <inheritdoc cref="SongRunner.RealVisualTime"/>
+        public double RealVisualTime => _songRunner.RealVisualTime;
+
         /// <inheritdoc cref="SongRunner.InputTime"/>
         public double InputTime => _songRunner.InputTime;
+
+        /// <inheritdoc cref="SongRunner.RealInputTime"/>
+        public double RealInputTime => _songRunner.RealInputTime;
 
         /// <inheritdoc cref="SongRunner.SongSpeed"/>
         public float SongSpeed => _songRunner.SongSpeed;
@@ -109,7 +117,7 @@ namespace YARG.Gameplay
         public int   BandScore { get; private set; }
         public int   BandCombo { get; private set; }
         public float BandStars { get; private set; }
-
+        
         public ReplayInfo ReplayInfo { get; private set; }
         public ReplayData ReplayData { get; private set; }
 
@@ -121,7 +129,6 @@ namespace YARG.Gameplay
 
         private StemMixer _mixer;
 
-        private List<double> _frameTimes;
 
         public bool PlayingAShow => GlobalVariables.State.PlayingAShow;
         public int  ShowIndex = 0;
@@ -133,7 +140,6 @@ namespace YARG.Gameplay
             // Set references
             PracticeManager = GetComponent<PracticeManager>();
             BackgroundManager = GetComponent<BackgroundManager>();
-            EngineManager = new EngineManager();
 
             YargPlayers = PlayerContainer.Players;
 
@@ -162,8 +168,6 @@ namespace YARG.Gameplay
 
             // Update countdown display style from global settings
             CountdownDisplay.DisplayStyle = SettingsManager.Settings.CountdownDisplay.Value;
-
-            _frameTimes = new List<double>();
         }
 
         private void OnDestroy()
@@ -184,7 +188,7 @@ namespace YARG.Gameplay
             _pauseMenu.PopAllMenus();
             _mixer?.Dispose();
             _songRunner?.Dispose();
-            BeatEventHandler?.Audio.Unsubscribe(StarPowerClap);
+            BeatEventHandler?.Unsubscribe(StarPowerClap);
             BackgroundManager.Dispose();
 
             // Reset the time scale back, as it would be 0 at this point (because of pausing)
@@ -219,22 +223,17 @@ namespace YARG.Gameplay
 
             // Update handlers
             _songRunner.Update();
-            BeatEventHandler.Update(_songRunner.SongTime, _songRunner.VisualTime);
+            BeatEventHandler.Update(_songRunner.SongTime);
 
             // Update players
             int totalScore = 0;
             float totalStars = 0f;
             foreach (var player in _players)
             {
-                player.GameplayUpdate();
+                player.UpdateWithTimes(_songRunner.InputTime);
 
                 totalScore += player.Score;
                 totalStars += player.Stars;
-            }
-
-            if (GlobalVariables.VerboseReplays)
-            {
-                _frameTimes.Add(_songRunner.InputTime);
             }
 
             BandScore = totalScore;
@@ -254,7 +253,7 @@ namespace YARG.Gameplay
         {
             _songRunner.SetSongTime(time, delayTime);
 
-            BeatEventHandler.Reset();
+            BeatEventHandler.ResetTimers();
             BackgroundManager.SetTime(_songRunner.SongTime + Song.SongOffsetSeconds);
         }
 
@@ -398,6 +397,9 @@ namespace YARG.Gameplay
         public double GetRelativeInputTime(double timeFromInputSystem)
             => _songRunner.GetRelativeInputTime(timeFromInputSystem);
 
+        public double GetCalibratedRelativeInputTime(double timeFromInputSystem)
+            => _songRunner.GetCalibratedRelativeInputTime(timeFromInputSystem);
+
         private bool EndSong()
         {
             if (IsPractice)
@@ -422,7 +424,7 @@ namespace YARG.Gameplay
             try
             {
                 _isReplaySaved = false;
-                replayInfo = SaveReplay(InputTime, ScoreContainer.ScoreReplayDirectory);
+                replayInfo = SaveReplay(Song.SongLengthSeconds, ScoreContainer.ScoreReplayDirectory);
             }
             catch (Exception e)
             {
@@ -579,15 +581,14 @@ namespace YARG.Gameplay
             }
 
             var stars = StarAmountHelper.GetStarsFromInt((int) (bandStars / frames.Count));
-            var data = new ReplayData(colorProfiles, cameraPresets, frames.ToArray(), _frameTimes.ToArray());
-
+            var data = new ReplayData(colorProfiles, cameraPresets, frames.ToArray());
             var (success, replayInfo) = ReplayIO.TrySerialize(directory, Song, SongSpeed, length, bandScore, stars, replayStats.ToArray(), data);
             if (!success)
             {
                 return null;
             }
 
-            ReplayContainer.AddEntry(replayInfo);
+           ReplayContainer.AddEntry(replayInfo);
             _isReplaySaved = true;
             return replayInfo;
         }

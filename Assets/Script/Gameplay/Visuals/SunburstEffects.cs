@@ -1,6 +1,6 @@
 using DG.Tweening;
 using UnityEngine;
-using YARG.Playback;
+using YARG.Core.Chart;
 using YARG.Settings;
 
 namespace YARG.Gameplay.Visuals
@@ -46,7 +46,8 @@ namespace YARG.Gameplay.Visuals
 
         protected override void GameplayAwake()
         {
-            GameManager.BeatEventHandler.Visual.Subscribe(PulseSunburst, BeatEventType.StrongBeat);
+
+            GameManager.BeatEventHandler.Subscribe(PulseSunburst);
 
             // Get the components we'll need to manipulate later
             _sunburstMaterial = _sunburstEffect.GetComponent<SpriteRenderer>().material;
@@ -160,7 +161,7 @@ namespace YARG.Gameplay.Visuals
             _sunburstEffect.transform.Rotate(0f, 0f, Time.deltaTime * -25f);
         }
 
-        private void PulseSunburst()
+        private void PulseSunburst(Beatline beatline)
         {
             if (!_groove && !_starpower)
             {
@@ -268,7 +269,7 @@ namespace YARG.Gameplay.Visuals
             _grooveStartSequence?.Kill();
             _starpowerStartSequence?.Kill();
             _sunburstDisableSequence?.Kill();
-            GameManager.BeatEventHandler.Visual.Unsubscribe(PulseSunburst);
+            GameManager.BeatEventHandler.Unsubscribe(PulseSunburst);
         }
     }
 }

@@ -1,28 +1,23 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using YARG.Core.Chart;
+using YARG.Core.Logging;
+using YARG.Integration;
 
 namespace YARG.Playback
 {
-    public enum BeatEventType
+    public enum TempoMapEventMode
     {
         /// <summary>
-        /// Fire events relative to all beatlines (measure, strong, weak).
-        /// </summary>
-        WeakBeat,
-
-        /// <summary>
-        /// Fire events relative to strong beatlines (including measure beatlines).
-        /// </summary>
-        StrongBeat,
-
-        /// <summary>
-        /// Fire events relative to beats calculated from the time signature only.
+        /// Fire events relative to beats (relative to time signature).
         /// </summary>
         /// <remarks>
-        /// Note that this has no direct correspondence to beatlines, as they can be authored manually.
+        /// 1 = every beat, 2 = every 2 beats, 0.5 = every beat and every half-beat, etc.
+        /// A time signature of x/4 will make events occur relative to 1/4th steps,
+        /// x/8 will make events occur relative to 1/8th steps, etc.
         /// </remarks>
-        DenominatorBeat,
+        Beat,
 
         /// <summary>
         /// Fire events relative to quarter notes (absolute).
@@ -30,11 +25,8 @@ namespace YARG.Playback
         /// <remarks>
         /// 1 = 1/4th note, 2 = 1/2nd note, 0.5 = 1/8th note, etc.
         /// Time signature does not affect this rate.
-        /// <br/>
-        /// This event type is not intended to be used at its default rate;
-        /// it's moreso useful for firing at specific smaller steps like 1/16th or 1/32nd.
         /// </remarks>
-        QuarterNote,
+        Quarter,
 
         /// <summary>
         /// Fire events relative to measures.
@@ -47,225 +39,241 @@ namespace YARG.Playback
         Measure,
     }
 
-    public class BeatEvent
-    {
-        /// <summary>
-        /// The event type to track the progress of.
-        /// </summary>
-        private readonly BeatEventType _mode;
-
-        /// <summary>
-        /// The number of times this event should occur per unit of progress.
-        /// </summary>
-        private readonly float _rate;
-
-        /// <summary>
-        /// The offset of the event in seconds.
-        /// </summary>
-        /// <remarks>
-        /// 0.05 = 50 ms late, -0.025 = 25 ms early.
-        /// </remarks>
-        private readonly double _offset;
-
-        public event Action Action;
-
-        public double CurrentProgress { get; private set; }
-        public double CurrentPercentage => CurrentProgress % 1;
-        public int CurrentCount => (int) CurrentProgress;
-
-        // This field being initialized to -1 ensures that the event fires at the start of the song
-        private int _lastCount = -1;
-
-        public BeatEvent(BeatEventType mode, float division, double offset)
-        {
-            _mode = mode;
-            _rate = 1 / division;
-            _offset = offset;
-        }
-
-        public void Update(double time, SyncTrack sync)
-        {
-            // Apply offset up-front
-            time -= _offset;
-            if (time < 0)
-            {
-                return;
-            }
-
-            // Determine progress
-            uint quarterTick = sync.TimeToTick(time);
-            double progress = _mode switch
-            {
-                BeatEventType.WeakBeat => sync.GetWeakBeatPosition(quarterTick),
-                BeatEventType.StrongBeat => sync.GetStrongBeatPosition(quarterTick),
-                BeatEventType.DenominatorBeat => sync.GetDenominatorBeatPosition(quarterTick),
-                BeatEventType.QuarterNote => sync.GetQuarterNotePosition(quarterTick),
-                BeatEventType.Measure => sync.GetMeasurePosition(quarterTick),
-                _ => throw new NotImplementedException($"Unhandled beat event mode {_mode}!")
-            };
-
-            CurrentProgress = progress * _rate;
-            if (CurrentCount != _lastCount)
-            {
-                Action?.Invoke();
-                _lastCount = CurrentCount;
-            }
-        }
-
-        public void Reset()
-        {
-            _lastCount = -1;
-        }
-    }
-
-    public class BeatEventController
-    {
-        private struct BeatEventKey
-        {
-            public BeatEventType mode;
-            public float division;
-            public double offset;
-
-            public readonly override int GetHashCode()
-            {
-                return HashCode.Combine(mode, division, offset);
-            }
-        }
-
-        public BeatEvent WeakBeat { get; }
-        public BeatEvent StrongBeat { get; }
-        public BeatEvent DenominatorBeat { get; }
-        public BeatEvent QuarterNote { get; }
-        public BeatEvent Measure { get; }
-
-        private readonly Dictionary<BeatEventKey, BeatEvent> _events = new();
-        private readonly Dictionary<Action, BeatEvent> _eventsByAction = new();
-
-        // Necessary to allow adding or removing subscriptions within event handlers
-        private readonly List<(BeatEventKey key, Action action)> _addEvents = new();
-        private readonly List<Action> _removeEvents = new();
-
-        public BeatEventController()
-        {
-            BeatEvent MakeBeatEvent(BeatEventType mode)
-            {
-                var key = new BeatEventKey()
-                {
-                    mode = mode,
-                    division = 1,
-                    offset = 0,
-                };
-
-                var ev = new BeatEvent(key.mode, key.division, key.offset);
-                _events.Add(key, ev);
-                return ev;
-            }
-
-            WeakBeat = MakeBeatEvent(BeatEventType.WeakBeat);
-            StrongBeat = MakeBeatEvent(BeatEventType.StrongBeat);
-            DenominatorBeat = MakeBeatEvent(BeatEventType.DenominatorBeat);
-            QuarterNote = MakeBeatEvent(BeatEventType.QuarterNote);
-            Measure = MakeBeatEvent(BeatEventType.Measure);
-        }
-
-        /// <summary>
-        /// Subscribes to a beat event using the tempo map as the driver.
-        /// </summary>
-        /// <param name="action">The action to be called when the beat occurs.</param>
-        /// <param name="mode">The tempo map event type to use for the event.</param>
-        /// <param name="division">The division at which events should be fired, relative to the units of <paramref name="mode"/>.</param>
-        /// <param name="offset">The constant offset to use for the event.</param>
-        public void Subscribe(Action action, BeatEventType mode, float division = 1, double offset = 0)
-        {
-            var key = new BeatEventKey()
-            {
-                mode = mode,
-                division = division,
-                offset = offset,
-            };
-
-            _addEvents.Add((key, action));
-        }
-
-        public void Unsubscribe(Action action)
-        {
-            _removeEvents.Add(action);
-        }
-
-        public BeatEvent GetEventForAction(Action action)
-        {
-            return _eventsByAction[action];
-        }
-
-        public void Update(double time, SyncTrack sync)
-        {
-            foreach (var (key, action) in _addEvents)
-            {
-                if (!_events.TryGetValue(key, out var ev))
-                {
-                    ev = new(key.mode, key.division, key.offset);
-                    _events.Add(key, ev);
-                }
-
-                ev.Action += action;
-                _eventsByAction[action] = ev;
-            }
-
-            foreach (var action in _removeEvents)
-            {
-                if (_eventsByAction.Remove(action, out var ev))
-                {
-                    ev.Action -= action;
-                }
-            }
-
-            _addEvents.Clear();
-            _removeEvents.Clear();
-
-            // Skip until in the chart
-            if (time < 0)
-            {
-                return;
-            }
-
-            // Update actions
-            foreach (var state in _events.Values)
-            {
-                state.Update(time, sync);
-            }
-        }
-
-        public void Reset()
-        {
-            foreach (var state in _events.Values)
-            {
-                state.Reset();
-            }
-        }
-    }
-
     public class BeatEventHandler
     {
+        private interface IBeatAction
+        {
+            void Update(double songTime, SyncTrack sync);
+            void Reset();
+        }
+
+        private class TempoMapAction : IBeatAction
+        {
+            /// <summary>
+            /// The number of beats for the rate at which this event should occur at.
+            /// </summary>
+            private readonly float _beatRate;
+
+            /// <summary>
+            /// The offset of the event in seconds.
+            /// </summary>
+            /// <remarks>
+            /// 0.05 = 50 ms late, -0.025 = 25 ms early.
+            /// </remarks>
+            private readonly double _offset;
+
+            /// <summary>
+            /// The action to call at the set beat rate.
+            /// </summary>
+            private readonly Action _action;
+
+            /// <summary>
+            /// The action to call at the set beat rate.
+            /// </summary>
+            private readonly TempoMapEventMode _mode;
+
+            private int _eventsHandled = -1;
+
+            private int _tempoIndex;
+            private int _timeSigIndex;
+
+            public TempoMapAction(Action action, float beatRate, double offset, TempoMapEventMode mode)
+            {
+                _beatRate = beatRate;
+                _offset = offset;
+                _action = action;
+                _mode = mode;
+            }
+
+            public void Reset()
+            {
+                _eventsHandled = -1;
+                _tempoIndex = 0;
+                _timeSigIndex = 0;
+            }
+
+            public void Update(double songTime, SyncTrack sync)
+            {
+                // Apply offset up-front
+                songTime -= _offset;
+                if (songTime < 0)
+                {
+                    return;
+                }
+
+                var tempos = sync.Tempos;
+                var timeSigs = sync.TimeSignatures;
+
+                // Progress tempo map
+                while (_tempoIndex + 1 < tempos.Count && tempos[_tempoIndex + 1].Time < songTime) _tempoIndex++;
+
+                while (_timeSigIndex + 1 < timeSigs.Count && timeSigs[_timeSigIndex + 1].Time < songTime)
+                {
+                    _timeSigIndex++;
+                    // Reset beats for each new time signature
+                    _eventsHandled = -1;
+                }
+
+                // Progress beat count
+                var timeSig = timeSigs[_timeSigIndex];
+                var tempo = tempos[_tempoIndex];
+                double progress = _mode switch
+                {
+                    TempoMapEventMode.Beat => timeSig.GetBeatProgress(songTime, sync, tempo),
+                    TempoMapEventMode.Quarter => timeSig.GetQuarterNoteProgress(songTime, sync, tempo),
+                    TempoMapEventMode.Measure => timeSig.GetMeasureProgress(songTime, sync, tempo),
+                    _ => throw new NotImplementedException($"Unhandled beat event mode {_mode}!")
+                };
+
+                int eventCount = (int) (progress / _beatRate);
+                if (eventCount > _eventsHandled)
+                {
+                    _eventsHandled = eventCount;
+                    _action();
+                }
+            }
+        }
+
+        private class BeatlineAction : IBeatAction
+        {
+            private readonly double _offset;
+            private readonly Action<Beatline> _action;
+
+            private int _beatlineIndex;
+
+            public BeatlineAction(Action<Beatline> action, double offset)
+            {
+                _action = action;
+                _offset = offset;
+            }
+
+            public void Reset()
+            {
+                _beatlineIndex = 0;
+            }
+
+            public void Update(double songTime, SyncTrack sync)
+            {
+                // Apply offset up-front
+                songTime -= _offset;
+                if (songTime < 0)
+                {
+                    return;
+                }
+
+                var beatlines = sync.Beatlines;
+                while (_beatlineIndex + 1 < beatlines.Count && beatlines[_beatlineIndex + 1].Time < songTime)
+                {
+                    // Deliberately call with each beatline
+                    // Since there are multiple kinds of beatline, we don't want to
+                    // end up skipping events that rely on specific types
+                    _action(beatlines[++_beatlineIndex]);
+                }
+            }
+        }
+
         private readonly SyncTrack _sync;
 
-        public BeatEventController Audio { get; } = new();
-        public BeatEventController Visual { get; } = new();
+        // private int _tempoIndex;
+        // private int _timeSigIndex;
+
+        private readonly Dictionary<Delegate, IBeatAction> _states = new();
+
+        // Necessary to allow adding or removing subscriptions within event handlers
+        private readonly List<(bool, Delegate, IBeatAction)> _changeStates = new();
 
         public BeatEventHandler(SyncTrack sync)
         {
             _sync = sync;
         }
 
-        public void Update(double songTime, double visualTime)
+        /// <summary>
+        /// Subscribes to a beat event using the tempo map as the driver.
+        /// </summary>
+        /// <param name="action">The action to be called when the beat occurs.</param>
+        /// <param name="beatRate">The beat rate to use for the event (see <see cref="TempoMapEventMode"/>).</param>
+        /// <param name="offset">The constant offset to use for the event.</param>
+        /// <param name="mode">The tempo map mode to use for the event.</param>
+        public void Subscribe(Action action, float beatRate, double offset = 0,
+            TempoMapEventMode mode = TempoMapEventMode.Beat)
         {
-            Audio.Update(songTime, _sync);
-            Visual.Update(visualTime, _sync);
+            _changeStates.Add((true, action, new TempoMapAction(action, beatRate, offset, mode)));
         }
 
-        public void Reset()
+        /// <summary>
+        /// Subscribes to a beat event using beatlines as the driver.
+        /// </summary>
+        /// <param name="action">The action to be called when the beat occurs.</param>
+        /// <param name="offset">The constant offset to use for the event.</param>
+        public void Subscribe(Action<Beatline> action, double offset = 0)
         {
-            Audio.Reset();
-            Visual.Reset();
+            _changeStates.Add((true, action, new BeatlineAction(action, offset)));
+        }
+
+        public void Unsubscribe(Action action)
+        {
+            _changeStates.Add((false, action, null));
+        }
+
+        public void Unsubscribe(Action<Beatline> action)
+        {
+            _changeStates.Add((false, action, null));
+        }
+
+        public void ResetTimers()
+        {
+            foreach (var state in _states.Values)
+            {
+                state.Reset();
+            }
+
+            // _tempoIndex = 0;
+            // _timeSigIndex = 0;
+        }
+
+        public void Update(double songTime)
+        {
+            foreach (var (add, action, state) in _changeStates)
+            {
+                if (add)
+                {
+                    if (!_states.TryAdd(action, state))
+                    {
+                        YargLogger.LogWarning("A beat event handler with the same action has already been added!");
+                    }
+                }
+                else
+                {
+                    _states.Remove(action);
+                }
+            }
+
+            _changeStates.Clear();
+
+            // Skip until in the chart
+            if (songTime < 0)
+            {
+                return;
+            }
+
+#if false // Not necessary currently, but might be in the future
+            // Update the current sync track info
+            var tempos = _sync.Tempos;
+            var timeSigs = _sync.TimeSignatures;
+
+            while (_tempoIndex + 1 < tempos.Count && tempos[_tempoIndex + 1].Time < songTime)
+                _tempoIndex++;
+            while (_timeSigIndex + 1 < timeSigs.Count && timeSigs[_timeSigIndex + 1].Time < songTime)
+                _timeSigIndex++;
+
+            var finalTempo = tempos[_tempoIndex];
+            var finalTimeSig = timeSigs[_timeSigIndex];
+#endif
+            // Update actions
+            foreach (var state in _states.Values)
+            {
+                state.Update(songTime, _sync);
+            }
         }
     }
 }

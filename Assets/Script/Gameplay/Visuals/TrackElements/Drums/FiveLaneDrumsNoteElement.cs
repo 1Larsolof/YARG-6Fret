@@ -19,25 +19,10 @@ namespace YARG.Gameplay.Visuals
                 // Deal with non-kick notes
 
                 // Set the position
-                int position;
-                if (Player.Player.Profile.SwapSnareAndHiHat)
-                {
-                    position = NoteRef.Pad switch
-                    {
-                        1 => 2,
-                        2 => 1,
-                        _ => NoteRef.Pad
-                    };
-                }
-                else
-                {
-                    position = NoteRef.Pad;
-                }
-
-                transform.localPosition = new Vector3(GetElementX(position, 5), 0f, 0f) * LeftyFlipMultiplier;
+                transform.localPosition = new Vector3(GetElementX(NoteRef.Pad, 5), 0f, 0f) * LeftyFlipMultiplier;
 
                 // Get which note model to use
-                if (Player.Player.Profile.UseCymbalModels)
+                if (SettingsManager.Settings.UseCymbalModelsInFiveLane.Value)
                 {
                     bool isCymbal = (FiveLaneDrumPad) NoteRef.Pad is FiveLaneDrumPad.Yellow or FiveLaneDrumPad.Orange;
 

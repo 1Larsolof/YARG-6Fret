@@ -190,8 +190,6 @@ namespace YARG.Gameplay
             // Initialize song runner
             _songRunner = new SongRunner(
                 _mixer,
-                startTime: 0,
-                SONG_START_DELAY,
                 GlobalVariables.State.SongSpeed,
                 audioCalibration,
                 SettingsManager.Settings.VideoCalibration.Value,
@@ -229,7 +227,8 @@ namespace YARG.Gameplay
 
             // TODO: Move the offset here to SFX configuration
             // The clap SFX has 20 ms of lead-up before the actual impact happens
-            BeatEventHandler.Audio.Subscribe(StarPowerClap, BeatEventType.StrongBeat, offset: -0.02);
+            // Must be offset by audio calibration to account for playback delay
+            BeatEventHandler.Subscribe(StarPowerClap, -0.02 + _songRunner.AudioCalibration);
 
             // Log constant values
             YargLogger.LogFormatDebug("Audio calibration: {0}, video calibration: {1}, song offset: {2}",
@@ -243,8 +242,7 @@ namespace YARG.Gameplay
 
         private bool LoadReplay()
         {
-            var readOptions = new ReplayReadOptions { KeepFrameTimes = GlobalVariables.VerboseReplays };
-            var (result, data) = ReplayIO.TryLoadData(ReplayInfo, readOptions);
+            var (result, data) = ReplayIO.TryLoadData(ReplayInfo);
             if (result != ReplayReadResult.Valid)
             {
                 YargLogger.LogFormatError("Failed to load replay! Result: {0}", result);
@@ -310,6 +308,9 @@ namespace YARG.Gameplay
 
         private void FinalizeChart()
         {
+            BeatEventHandler = new BeatEventHandler(Chart.SyncTrack);
+            _chartLoaded?.Invoke(Chart);
+
             double audioLength = _mixer.Length;
             double chartLength = Chart.GetEndTime();
             double endTime = Chart.GetEndEvent()?.Time ?? -1;
@@ -330,13 +331,6 @@ namespace YARG.Gameplay
             {
                 SongLength = endTime;
             }
-
-            // Make sure enough beatlines have been generated to cover the song end delay
-            Chart.SyncTrack.GenerateBeatlines(SongLength + SONG_END_DELAY, true);
-
-            BeatEventHandler = new BeatEventHandler(Chart.SyncTrack);
-            _chartLoaded?.Invoke(Chart);
-
             _songLoaded?.Invoke();
         }
 
